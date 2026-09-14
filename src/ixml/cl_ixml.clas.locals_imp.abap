@@ -202,6 +202,8 @@ ENDCLASS.
 
 CLASS lcl_node DEFINITION.
   PUBLIC SECTION.
+* attributes are nodes of this class as well
+    INTERFACES if_ixml_attribute.
     INTERFACES if_ixml_element.
 
     METHODS constructor
@@ -335,7 +337,7 @@ CLASS lcl_node IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD if_ixml_element~get_attributes.
-    ASSERT 1 = 'todo'.
+    attr = if_ixml_node~get_attributes( ).
   ENDMETHOD.
 
   METHOD if_ixml_element~get_next.

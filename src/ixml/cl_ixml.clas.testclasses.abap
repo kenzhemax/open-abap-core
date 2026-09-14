@@ -60,6 +60,7 @@ CLASS ltcl_xml DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT FINAL.
     METHODS top_attr FOR TESTING RAISING cx_static_check.
     METHODS unqualified_attr FOR TESTING RAISING cx_static_check.
     METHODS attrs_test FOR TESTING RAISING cx_static_check.
+    METHODS element_get_attributes FOR TESTING RAISING cx_static_check.
     METHODS get_elements_by_tag_name FOR TESTING RAISING cx_static_check.
     METHODS get_elements_by_tag_name_elem FOR TESTING RAISING cx_static_check.
     METHODS get_elements_by_tag_name_ns FOR TESTING RAISING cx_static_check.
@@ -1514,6 +1515,31 @@ CLASS ltcl_xml IMPLEMENTATION.
     cl_abap_unit_assert=>assert_char_cp(
       act = lv_xml
       exp = '*serializer_version="v1.0.0"*' ).
+
+  ENDMETHOD.
+
+  METHOD element_get_attributes.
+
+    DATA li_doc      TYPE REF TO if_ixml_document.
+    DATA li_root     TYPE REF TO if_ixml_element.
+    DATA li_iterator TYPE REF TO if_ixml_node_iterator.
+    DATA li_attr     TYPE REF TO if_ixml_attribute.
+    DATA lv_names    TYPE string.
+
+* walk the attributes the way abap2xlsx fills a structure from a tag
+    li_doc = parse( |<sheet name="Sheet1" sheetId="1"/>| ).
+    li_root = li_doc->get_root_element( ).
+
+    li_iterator = li_root->get_attributes( )->create_iterator( ).
+    li_attr ?= li_iterator->get_next( ).
+    WHILE li_attr IS BOUND.
+      lv_names = lv_names && li_attr->get_name( ) && '=' && li_attr->get_value( ) && ';'.
+      li_attr ?= li_iterator->get_next( ).
+    ENDWHILE.
+
+    cl_abap_unit_assert=>assert_equals(
+      act = lv_names
+      exp = 'name=Sheet1;sheetId=1;' ).
 
   ENDMETHOD.
 
