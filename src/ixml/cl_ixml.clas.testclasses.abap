@@ -63,6 +63,9 @@ CLASS ltcl_xml DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT FINAL.
     METHODS get_elements_by_tag_name FOR TESTING RAISING cx_static_check.
     METHODS get_elements_by_tag_name_elem FOR TESTING RAISING cx_static_check.
     METHODS get_elements_by_tag_name_ns FOR TESTING RAISING cx_static_check.
+    METHODS get_elements_by_tag_name_uri FOR TESTING RAISING cx_static_check.
+    METHODS get_namespace_uri FOR TESTING RAISING cx_static_check.
+    METHODS get_namespace_uri_created FOR TESTING RAISING cx_static_check.
     METHODS get_elements_by_tag_name_empty FOR TESTING RAISING cx_static_check.
     METHODS get_next_sibling FOR TESTING RAISING cx_static_check.
     METHODS get_next_last_sibling FOR TESTING RAISING cx_static_check.
@@ -1584,6 +1587,100 @@ CLASS ltcl_xml IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       act = li_collection->get_item( 2 )->get_value( )
       exp = '3' ).
+
+  ENDMETHOD.
+
+  METHOD get_elements_by_tag_name_uri.
+
+    DATA li_doc        TYPE REF TO if_ixml_document.
+    DATA li_collection TYPE REF TO if_ixml_node_collection.
+
+* as in an xlsx sheet: the elements have no prefix, their namespace is the default one
+    li_doc = parse( |<worksheet xmlns="urn:main" xmlns:x="urn:other"><row>1</row><x:row>2</x:row><row>3</row></worksheet>| ).
+
+    li_collection = li_doc->get_elements_by_tag_name_ns(
+      name = 'row'
+      uri  = 'urn:main' ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = li_collection->get_length( )
+      exp = 2 ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = li_collection->get_item( 2 )->get_value( )
+      exp = '3' ).
+
+    li_collection = li_doc->get_elements_by_tag_name_ns(
+      name = 'row'
+      uri  = 'urn:other' ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = li_collection->get_length( )
+      exp = 1 ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = li_collection->get_item( 1 )->get_value( )
+      exp = '2' ).
+
+  ENDMETHOD.
+
+  METHOD get_namespace_uri.
+
+    DATA li_doc  TYPE REF TO if_ixml_document.
+    DATA li_node TYPE REF TO if_ixml_node.
+
+    li_doc = parse( |<root xmlns="urn:main" xmlns:r="urn:rel"><r:rel/><item>text</item>| &&
+                    |<x:a xmlns:x="urn:1"><x:b xmlns:x="urn:2"/></x:a><y:c/></root>| ).
+
+* the default namespace, also for a child without a prefix
+    cl_abap_unit_assert=>assert_equals(
+      act = li_doc->get_root_element( )->get_namespace_uri( )
+      exp = 'urn:main' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_doc->find_from_name_ns( name = 'item' )->get_namespace_uri( )
+      exp = 'urn:main' ).
+
+* declared on an ancestor
+    cl_abap_unit_assert=>assert_equals(
+      act = li_doc->find_from_name_ns( name = 'rel' )->get_namespace_uri( )
+      exp = 'urn:rel' ).
+
+* the nearest declaration wins
+    cl_abap_unit_assert=>assert_equals(
+      act = li_doc->find_from_name_ns( name = 'b' )->get_namespace_uri( )
+      exp = 'urn:2' ).
+
+* an undeclared prefix and text are in no namespace
+    cl_abap_unit_assert=>assert_equals(
+      act = li_doc->find_from_name_ns( name = 'c' )->get_namespace_uri( )
+      exp = '' ).
+    li_node = li_doc->find_from_name_ns( name = 'item' )->get_first_child( ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_node->get_namespace_uri( )
+      exp = '' ).
+
+  ENDMETHOD.
+
+  METHOD get_namespace_uri_created.
+
+    DATA li_root  TYPE REF TO if_ixml_element.
+    DATA li_child TYPE REF TO if_ixml_element.
+
+    li_root = mi_document->create_simple_element(
+      name   = 'root'
+      parent = mi_document ).
+    li_root->set_attribute_ns(
+      name   = 'r'
+      prefix = 'xmlns'
+      value  = 'urn:rel' ).
+    li_child = mi_document->create_simple_element_ns(
+      name   = 'item'
+      prefix = 'r'
+      parent = li_root ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = li_child->get_namespace_uri( )
+      exp = 'urn:rel' ).
 
   ENDMETHOD.
 

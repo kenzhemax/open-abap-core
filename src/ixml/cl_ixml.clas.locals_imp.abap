@@ -233,7 +233,20 @@ CLASS lcl_node DEFINITION.
       IMPORTING
         iv_name      TYPE string
         iv_namespace TYPE string
+        iv_uri       TYPE string
         io_list      TYPE REF TO lcl_node_list.
+
+    METHODS lookup_namespace_uri
+      IMPORTING
+        iv_prefix     TYPE string
+      RETURNING
+        VALUE(rv_uri) TYPE string.
+
+    METHODS is_in_namespace
+      IMPORTING
+        iv_uri       TYPE string
+      RETURNING
+        VALUE(rv_in) TYPE abap_bool.
 ENDCLASS.
 
 CLASS lcl_node IMPLEMENTATION.
@@ -331,7 +344,10 @@ CLASS lcl_node IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD if_ixml_node~get_namespace_uri.
-    ASSERT 1 = 'todo'.
+* text is in no namespace, an element gets it from the xmlns declarations
+    IF mv_name <> '#text'.
+      rval = lookup_namespace_uri( mv_namespace ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD if_ixml_element~get_attributes.
@@ -439,6 +455,7 @@ CLASS lcl_node IMPLEMENTATION.
     collect_elements_by_tag_name(
       iv_name      = name
       iv_namespace = namespace
+      iv_uri       = ''
       io_list      = lo_list ).
     val = lo_list.
   ENDMETHOD.
@@ -448,7 +465,8 @@ CLASS lcl_node IMPLEMENTATION.
     CREATE OBJECT lo_list.
     collect_elements_by_tag_name(
       iv_name      = name
-      iv_namespace = uri
+      iv_namespace = ''
+      iv_uri       = uri
       io_list      = lo_list ).
     val = lo_list.
   ENDMETHOD.
@@ -502,23 +520,70 @@ CLASS lcl_node IMPLEMENTATION.
       IF li_node IS INITIAL.
         EXIT. " current loop
       ENDIF.
+      lo_node ?= li_node.
 
       IF li_node->get_name( ) <> '#text'.
         lv_matches = boolc( iv_name = '*' OR li_node->get_name( ) = iv_name ).
         IF lv_matches = abap_true
             AND ( iv_namespace IS INITIAL
               OR iv_namespace = '*'
-              OR li_node->get_namespace( ) = iv_namespace ).
+              OR li_node->get_namespace( ) = iv_namespace )
+            AND lo_node->is_in_namespace( iv_uri ) = abap_true.
           io_list->append( li_node ).
         ENDIF.
       ENDIF.
 
-      lo_node ?= li_node.
       lo_node->collect_elements_by_tag_name(
         iv_name      = iv_name
         iv_namespace = iv_namespace
+        iv_uri       = iv_uri
         io_list      = io_list ).
     ENDDO.
+  ENDMETHOD.
+
+  METHOD lookup_namespace_uri.
+* the nearest declaration wins: xmlns:prefix="uri", or xmlns="uri" for an
+* element without a prefix, on this node or on one of its ancestors
+    DATA li_node     TYPE REF TO if_ixml_node.
+    DATA li_attr     TYPE REF TO if_ixml_node.
+    DATA li_iterator TYPE REF TO if_ixml_node_iterator.
+    DATA lv_wanted   TYPE string.
+    DATA lv_name     TYPE string.
+
+    lv_wanted = 'xmlns'.
+    IF iv_prefix IS NOT INITIAL.
+      lv_wanted = 'xmlns:' && iv_prefix.
+    ENDIF.
+
+    li_node = me.
+    WHILE li_node IS NOT INITIAL.
+      li_iterator = li_node->get_attributes( )->create_iterator( ).
+      DO.
+        li_attr = li_iterator->get_next( ).
+        IF li_attr IS INITIAL.
+          EXIT. " current loop
+        ENDIF.
+* a parsed declaration is named "xmlns:r", a created one may be "r" with prefix "xmlns"
+        lv_name = li_attr->get_name( ).
+        IF li_attr->get_namespace_prefix( ) IS NOT INITIAL.
+          lv_name = li_attr->get_namespace_prefix( ) && ':' && lv_name.
+        ENDIF.
+        IF lv_name = lv_wanted.
+          rv_uri = li_attr->get_value( ).
+          RETURN.
+        ENDIF.
+      ENDDO.
+      li_node = li_node->get_parent( ).
+    ENDWHILE.
+  ENDMETHOD.
+
+  METHOD is_in_namespace.
+* a prefix is accepted as well, that is how iv_uri was matched before URIs
+* were resolved; a prefix has no colon, so it never equals an absolute URI
+    rv_in = boolc( iv_uri IS INITIAL
+      OR iv_uri = '*'
+      OR mv_namespace = iv_uri
+      OR if_ixml_node~get_namespace_uri( ) = iv_uri ).
   ENDMETHOD.
 
   METHOD if_ixml_element~render.
