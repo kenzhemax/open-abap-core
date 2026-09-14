@@ -38,6 +38,8 @@ CLASS ltcl_xml DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT FINAL.
     METHODS create FOR TESTING RAISING cx_static_check.
     METHODS create_set_attributes FOR TESTING RAISING cx_static_check.
     METHODS set_attribute_twice FOR TESTING RAISING cx_static_check.
+    METHODS parse_attr_prefix FOR TESTING RAISING cx_static_check.
+    METHODS attr_same_name_other_prefix FOR TESTING RAISING cx_static_check.
     METHODS parse_and_render FOR TESTING RAISING cx_static_check.
     METHODS parse_close_tag FOR TESTING RAISING cx_static_check.
     METHODS parse_more FOR TESTING RAISING cx_static_check.
@@ -125,6 +127,59 @@ CLASS ltcl_xml IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       act = lv_xml
       exp = |<?xml version="1.0" encoding="utf-16"?><tag count="2"/>| ).
+
+  ENDMETHOD.
+
+  METHOD parse_attr_prefix.
+
+    DATA li_doc     TYPE REF TO if_ixml_document.
+    DATA li_element TYPE REF TO if_ixml_element.
+    DATA li_attr    TYPE REF TO if_ixml_node.
+    DATA lv_xml     TYPE string.
+
+* as in workbook.xml, where a sheet refers to its part through r:id
+    li_doc = parse( |<sheets xmlns:r="urn:rel"><sheet name="Sheet1" r:id="rId1"/></sheets>| ).
+    li_element = li_doc->find_from_name_ns( name = 'sheet' ).
+
+    li_attr = li_element->if_ixml_node~get_attributes( )->get_named_item_ns( 'id' ).
+    cl_abap_unit_assert=>assert_not_initial( li_attr ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_attr->get_namespace_prefix( )
+      exp = 'r' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_element->get_attribute_ns( 'id' )
+      exp = 'rId1' ).
+
+* the qualified name still finds it, and rendering keeps the prefix
+    cl_abap_unit_assert=>assert_equals(
+      act = li_element->get_attribute( 'r:id' )
+      exp = 'rId1' ).
+
+    lv_xml = render( ).
+    cl_abap_unit_assert=>assert_char_cp(
+      act = lv_xml
+      exp = '*<sheets xmlns:r="urn:rel"><sheet name="Sheet1" r:id="rId1"/></sheets>' ).
+
+  ENDMETHOD.
+
+  METHOD attr_same_name_other_prefix.
+
+    DATA li_doc     TYPE REF TO if_ixml_document.
+    DATA li_element TYPE REF TO if_ixml_element.
+
+* two attributes may share the local name, the prefix tells them apart
+    li_doc = parse( |<a xmlns:r="urn:rel" id="1" r:id="2"/>| ).
+    li_element = li_doc->get_root_element( ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = li_element->if_ixml_node~get_attributes( )->get_length( )
+      exp = 3 ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_element->get_attribute( 'id' )
+      exp = '1' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_element->get_attribute( 'r:id' )
+      exp = '2' ).
 
   ENDMETHOD.
 

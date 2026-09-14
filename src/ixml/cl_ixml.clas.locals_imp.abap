@@ -106,10 +106,16 @@ CLASS lcl_named_node_map IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD if_ixml_named_node_map~get_named_item_ns.
-    DATA li_node LIKE LINE OF mt_list.
+* by local name, or by the qualified name like "r:id"
+    DATA li_node      LIKE LINE OF mt_list.
+    DATA lv_qualified TYPE string.
 
     LOOP AT mt_list INTO li_node.
-      IF li_node->get_name( ) = name.
+      lv_qualified = li_node->get_name( ).
+      IF li_node->get_namespace_prefix( ) IS NOT INITIAL.
+        lv_qualified = li_node->get_namespace_prefix( ) && ':' && lv_qualified.
+      ENDIF.
+      IF li_node->get_name( ) = name OR lv_qualified = name.
         val = li_node.
         RETURN.
       ENDIF.
@@ -125,14 +131,15 @@ CLASS lcl_named_node_map IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD if_ixml_named_node_map~set_named_item_ns.
-* replace an existing node with the same name, otherwise add it,
+* replace an existing node with the same name and prefix, otherwise add it,
 * appending unconditionally produces duplicate attributes
     DATA lv_index TYPE i.
     DATA li_node  LIKE LINE OF mt_list.
 
     LOOP AT mt_list INTO li_node.
       lv_index = sy-tabix.
-      IF li_node->get_name( ) = node->get_name( ).
+      IF li_node->get_name( ) = node->get_name( )
+          AND li_node->get_namespace_prefix( ) = node->get_namespace_prefix( ).
         MODIFY mt_list INDEX lv_index FROM node.
         RETURN.
       ENDIF.
@@ -1396,6 +1403,7 @@ CLASS lcl_parser IMPLEMENTATION.
     DATA li_node     TYPE REF TO if_ixml_node.
     DATA lv_offset   TYPE i.
     DATA lv_length   TYPE i.
+    DATA lv_prefix   TYPE string.
 
     IF lines( is_match-submatches ) = 1.
       RETURN.
@@ -1413,6 +1421,12 @@ CLASS lcl_parser IMPLEMENTATION.
       ENDIF.
 
       CREATE OBJECT li_node TYPE lcl_node.
+* r:id becomes the name id with the prefix r, as set_attribute_ns creates it
+      CLEAR lv_prefix.
+      IF lv_name CA ':'.
+        SPLIT lv_name AT ':' INTO lv_prefix lv_name.
+      ENDIF.
+      li_node->set_namespace_prefix( lv_prefix ).
       li_node->set_name( lv_name ).
       li_node->set_value( lv_value ).
       ii_node->get_attributes( )->set_named_item_ns( li_node ).
