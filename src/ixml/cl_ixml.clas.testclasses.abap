@@ -67,6 +67,7 @@ CLASS ltcl_xml DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT FINAL.
     METHODS get_next_sibling FOR TESTING RAISING cx_static_check.
     METHODS get_next_last_sibling FOR TESTING RAISING cx_static_check.
     METHODS get_next_after_move FOR TESTING RAISING cx_static_check.
+    METHODS clone_element FOR TESTING RAISING cx_static_check.
     METHODS find_from_path FOR TESTING RAISING cx_static_check.
     METHODS find_from_path_relative FOR TESTING RAISING cx_static_check.
     METHODS find_from_path_not_found FOR TESTING RAISING cx_static_check.
@@ -1672,6 +1673,47 @@ CLASS ltcl_xml IMPLEMENTATION.
       exp = 'second' ).
 
     cl_abap_unit_assert=>assert_initial( li_second->get_next( ) ).
+
+  ENDMETHOD.
+
+  METHOD clone_element.
+
+    DATA li_doc  TYPE REF TO if_ixml_document.
+    DATA li_root TYPE REF TO if_ixml_element.
+    DATA li_copy TYPE REF TO if_ixml_element.
+    DATA li_node TYPE REF TO if_ixml_node.
+
+    li_doc = parse( |<r:root xmlns:r="urn:r" a="1"><item>text</item><empty/></r:root>| ).
+    li_root = li_doc->get_root_element( ).
+    li_copy ?= li_root->clone( ).
+
+* a deep copy without a parent
+    cl_abap_unit_assert=>assert_equals(
+      act = li_copy->get_name( )
+      exp = 'root' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_copy->if_ixml_node~get_namespace_prefix( )
+      exp = 'r' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_copy->get_attribute( 'a' )
+      exp = '1' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_copy->get_value( )
+      exp = 'text' ).
+    cl_abap_unit_assert=>assert_initial( li_copy->if_ixml_node~get_parent( ) ).
+
+* changing the copy leaves the original alone
+    li_copy->set_attribute( name  = 'a'
+                            value = '2' ).
+    li_node = li_copy->get_first_child( ).
+    li_node->set_value( 'changed' ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = li_root->get_attribute( 'a' )
+      exp = '1' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = li_root->get_value( )
+      exp = 'text' ).
 
   ENDMETHOD.
 
